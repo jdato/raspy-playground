@@ -1,4 +1,4 @@
-use sysfs_gpio::{Direction, Pin};
+use sysfs_gpio::{Direction, Pin, Edge};
 use std::thread::sleep;
 use std::time::Duration;
 
@@ -35,14 +35,48 @@ fn letter_to_morse(led: Pin, letter: char) -> Result<(), sysfs_gpio::Error> {
 
 fn main() {
     let my_led = Pin::new(23);
-    my_led.with_exported(|| {
-        my_led.set_direction(Direction::Out).unwrap();
-        loop {
-            letter_to_morse(my_led, 's');
-            letter_to_morse(my_led, 'o');
-            letter_to_morse(my_led, 's');
-            sleep(Duration::from_millis(1000));
+    let my_button = Pin::new(24);
+    
+    my_led.export();
+    my_led.set_direction(Direction::Out);
+
+    my_button.export();
+    my_button.set_direction(Direction::In);
+
+    // loop {
+    //     match my_button.get_value() {
+    //         Ok(val) => {
+    //             println!("{:?}", val);
+                
+    //             if val == 1 {
+    //                 blink(100, my_led);
+    //                 blink(100, my_led);
+    //                 blink(100, my_led);
+    //                 blink(100, my_led);
+    //                 blink(100, my_led);
+    //             }
+    //         }
+    //         Err(err) => println!("{:?}", err)
+    //     }
+
+    //     sleep(Duration::from_millis(100));
+    // }
+
+    my_button.set_edge(Edge::RisingEdge).unwrap();
+
+    loop {
+        match my_button.get_poller().unwrap().poll(60_000) {
+            Ok(val) => match val {
+                Some(1) => {
+                    println!("{:?}", val);
+                    blink(100, my_led);
+                },
+                _ => ()
+            },
+            Err(_) => ()
         }
-        Ok(())
-    }).unwrap();
+    }
+
+    my_led.unexport();
+    my_button.unexport();
 }
