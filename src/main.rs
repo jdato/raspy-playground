@@ -33,7 +33,8 @@ fn letter_to_morse(led: Pin, letter: char) -> Result<(), sysfs_gpio::Error> {
     Ok(())
 }
 
-fn main() {
+#[tokio:main]
+async fn main() {
     let my_led = Pin::new(23);
     let my_button = Pin::new(24);
     
