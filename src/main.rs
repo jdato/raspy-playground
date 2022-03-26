@@ -1,6 +1,8 @@
 use sysfs_gpio::{Direction, Pin, Edge};
+use tokio::join;
 use std::thread::sleep;
 use std::time::Duration;
+use warp::Filter;
 
 fn blink(length: u64, led: Pin) -> Result<(), sysfs_gpio::Error> {
     led.set_value(1).unwrap();
@@ -33,8 +35,7 @@ fn letter_to_morse(led: Pin, letter: char) -> Result<(), sysfs_gpio::Error> {
     Ok(())
 }
 
-#[tokio:main]
-async fn main() {
+async fn blinker() -> Result<(), ()> {
     let my_led = Pin::new(23);
     let my_button = Pin::new(24);
     
@@ -43,25 +44,6 @@ async fn main() {
 
     my_button.export();
     my_button.set_direction(Direction::In);
-
-    // loop {
-    //     match my_button.get_value() {
-    //         Ok(val) => {
-    //             println!("{:?}", val);
-                
-    //             if val == 1 {
-    //                 blink(100, my_led);
-    //                 blink(100, my_led);
-    //                 blink(100, my_led);
-    //                 blink(100, my_led);
-    //                 blink(100, my_led);
-    //             }
-    //         }
-    //         Err(err) => println!("{:?}", err)
-    //     }
-
-    //     sleep(Duration::from_millis(100));
-    // }
 
     my_button.set_edge(Edge::RisingEdge).unwrap();
 
@@ -80,4 +62,54 @@ async fn main() {
 
     my_led.unexport();
     my_button.unexport();
+    Ok(())
+}
+
+async fn run_server() {
+    // GET /hello/warp => 200 OK with body "Hello, warp!"
+    // let hello = warp::path!("door" / String)
+    //     .map(|name| format!("Hello, {}!", name));
+
+    let my_button = Pin::new(24);
+
+    my_button.export();
+    my_button.set_direction(Direction::In);
+
+    my_button.set_edge(Edge::RisingEdge).unwrap();
+
+    warp::serve(warp::any().map(move || {
+        let door_state = match my_button.get_value() {
+            Ok(val) => {
+                if val > 0 {
+                    "closed"
+                } else {
+                    "open"
+                }
+            },
+            Err(_) => {
+                "broken"
+            }
+        };
+        format!("Door Checker.\n\nDoor is: {}", door_state)
+    }))
+        .run(([0, 0, 0, 0], 8080))
+        .await;
+}
+
+#[tokio::main]
+async fn main() {
+    let blinker_future = tokio::spawn(async {
+        // blinker().await;
+    });
+
+    let tide_future = tokio::spawn(
+        async {
+            run_server().await;
+        }
+    );
+    
+    join!(
+        blinker_future,
+        tide_future
+    );
 }
